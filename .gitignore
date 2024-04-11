@@ -1,1 +1,4 @@
 .venv/
+smsapi
+**/smsapi
+**/tempdata.csv
