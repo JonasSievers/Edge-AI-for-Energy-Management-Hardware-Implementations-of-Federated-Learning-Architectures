@@ -48,8 +48,12 @@ df_data = pd.DataFrame()
 
 DATA_COLLECTION_DAY = 10 #(1 is current day, 2 is today and yesterday)
 DATA_COLLECTION_CHECK_LOCAL = True
+
 HTTP_MAX_RETRIES = 3
 HTTP_PAUSE_TIME = 15
+
+REMOVE_OLD_DATA = True
+REMOVE_OLD_DATA_AFTER_DAYS = 30
 
 # DATA_FOLDER = "../../data"
 # DATA_FOLDER = os.getcwd()
@@ -91,11 +95,15 @@ for i in range(1, DATA_COLLECTION_DAY):
     formatted_dates.append(previous_date.strftime("%d.%m.%Y"))
 # -> ['17.04.2024', '16.04.2024', '15.04.2024']
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+if DATA_COLLECTION_DAY >=REMOVE_OLD_DATA_AFTER_DAYS :
+    logging.error(f"Overlapping days of collection and removal {DATA_COLLECTION_DAY} >= {REMOVE_OLD_DATA_AFTER_DAYS}")
+    sys.exit(1)
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logging.debug(f"Data folder is {DATA_FOLDER}")
 
 # try:
-#     os.remove(DATA_FOLDER+"/carbon_footprint_data.csv")
+#     os.remove(DATA_FOLDER+"/carbon_footprint_calc_data.csv")
 # except:
 #     pass
 
@@ -111,20 +119,20 @@ logging.debug(f"Data folder is {DATA_FOLDER}")
 
 newFile = False # Needed to create header in the new file
 
-if not os.path.exists(DATA_FOLDER+"/carbon_footprint_data.csv"):
-    logging.debug("carbon_footprint_data doesn't exist")
-    with open(DATA_FOLDER+"/carbon_footprint_data.csv", 'w') as f:
-        logging.debug("carbon_footprint_data file created")
+if not os.path.exists(DATA_FOLDER+"/carbon_footprint_calc_data.csv"):
+    logging.debug("carbon_footprint_calc_data doesn't exist")
+    with open(DATA_FOLDER+"/carbon_footprint_calc_data.csv", 'w') as f:
+        logging.debug("carbon_footprint_calc_data file created")
         pass  # This creates an empty file
 
-    logging.info(f"File does not exist, no local data available, carbon_footprint_data.csv created successfully.")
+    logging.info(f"File does not exist, no local data available, carbon_footprint_calc_data.csv created successfully.")
     dates_not_in_dataframe = formatted_dates
     newFile = True #Header will be needed because new file is empty
 else:
-    logging.info(f"File carbon_footprint_data already exists, skipping file creation, reading file")
+    logging.info(f"File carbon_footprint_calc_data already exists, skipping file creation, reading file")
 
     try:
-        df_data = pd.read_csv(DATA_FOLDER+"/carbon_footprint_data.csv", header=0, sep=";")
+        df_data = pd.read_csv(DATA_FOLDER+"/carbon_footprint_calc_data.csv", header=0, sep=";")
     except FileNotFoundError as e:
         logging.error(f"File not found: {e.filename}")
         sys.exit(1)
@@ -134,7 +142,9 @@ else:
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}")
         sys.exit(1)
+
     
+
     
     
     # List to store dates not in the DataFrame
@@ -143,6 +153,12 @@ else:
     # Check if DataFrame has debugdata
     if not df_data.empty:
         df_data['start_datetime'] = pd.to_datetime(df_data['start_datetime'])
+
+        # Remove old data, see config
+        if REMOVE_OLD_DATA:
+            cutoff_date = datetime.now() - timedelta(days=REMOVE_OLD_DATA_AFTER_DAYS)
+            cutoff_date = cutoff_date.astimezone(pytz.timezone('Europe/Paris'))
+            df_data = df_data[df_data['start_datetime'] > cutoff_date]
 
 
         # Delete all data from today
@@ -157,6 +173,7 @@ else:
                 logging.debug(f"{date} - No data found for date {date}, appending to dates_not_in_dataframe")
                 dates_not_in_dataframe.append(date)
             else:
+                logging.info(f"Using local data for {date}")
                 local_df = df_data[df_data['start_datetime'].dt.strftime("%d.%m.%Y") == date]
                 # Counting NaN values in each column
                 nan_counts = local_df.isna().sum()
@@ -169,10 +186,8 @@ else:
                     dates_not_in_dataframe.append(date)
                     #Remove all data of that date
                     df_data = df_data[df_data['start_datetime'].dt.strftime("%d.%m.%Y") != date]
-                    d=1
-                    d=2
         df_data= df_data.sort_values(by='start_datetime', ascending=True)
-        df_data.to_csv(DATA_FOLDER+"/carbon_footprint_data.csv", sep=';', header=True,index=False)                     
+        df_data.to_csv(DATA_FOLDER+"/carbon_footprint_calc_data.csv", sep=';', header=True,index=False)                     
     else:
         # If DataFrame is empty, all dates need to be downloaded
         dates_not_in_dataframe = formatted_dates
@@ -293,11 +308,53 @@ for date_to_get in dates_not_in_dataframe:
     df['end_unix_timestamp'] = df['end_datetime'].astype(int) / 10**9  # Convert nanoseconds to seconds
     # print(df)
     if newFile:
-        df.to_csv(DATA_FOLDER+"/carbon_footprint_data.csv", sep=';', header=True,index=False)
+        df.to_csv(DATA_FOLDER+"/carbon_footprint_calc_data.csv", sep=';', header=True,index=False)
         newFile = False
     else:
-        df.to_csv(DATA_FOLDER+"/carbon_footprint_data.csv", sep=';', header=False,index=False, mode='a')
+        df.to_csv(DATA_FOLDER+"/carbon_footprint_calc_data.csv", sep=';', header=False,index=False, mode='a')
     
+
+
+
+#   _____          _                          _               _         _    _               
+#  |  __ \        | |                        | |             | |       | |  (_)              
+#  | |  | |  __ _ | |_  __ _       ___  __ _ | |  ___  _   _ | |  __ _ | |_  _   ___   _ __  
+#  | |  | | / _` || __|/ _` |     / __|/ _` || | / __|| | | || | / _` || __|| | / _ \ | '_ \ 
+#  | |__| || (_| || |_| (_| |    | (__| (_| || || (__ | |_| || || (_| || |_ | || (_) || | | |
+#  |_____/  \__,_| \__|\__,_|     \___|\__,_||_| \___| \__,_||_| \__,_| \__||_| \___/ |_| |_|
+
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+
+df_data = pd.read_csv(DATA_FOLDER+"/carbon_footprint_calc_data.csv", header=0, sep=";")
+df_data['start_datetime'] = pd.to_datetime(df_data['start_datetime'])
+df_data['end_datetime'] = pd.to_datetime(df_data['end_datetime'])
+df_data= df_data.sort_values(by='start_datetime', ascending=True)
+
+
+# co2 dict ist in gr/kWh
+# df[energy source] ist in MW pro viertelstunde
+#  Umrechnung: df[energy_source]/4 -> MWh 
+#  df[energy_source]/4*1000 -> kWh
+for energy_source, co2_emission in co2_dict.items():
+    df_data[f"{energy_source}_co2"] = df_data[energy_source]/4*1000 * co2_emission
+
+df_data['totalEnergy_MWh'] = df_data[list(columns)].sum(axis=1)# still in MW pro 15 minutes
+df_data['totalEnergy_MWh'] = df_data['totalEnergy_MWh']/4# now in MWh
+columns_to_sum_co2 = [column + '_co2' for column in columns]
+df_data['totalCO2_gr'] = df_data[columns_to_sum_co2].sum(axis=1)
+df_data['emission_gr_kWh'] = round(df_data['totalCO2_gr'] / (df_data['totalEnergy_MWh']*1000),3) # gr / MWh*1000 -> gr/kWh
+
+
+
+selected_columns = df_data[['start_unix_timestamp','start_datetime', 'emission_gr_kWh']].copy()
+selected_columns.rename(columns={'start_datetime': 'datetime'}, inplace=True)
+selected_columns.rename(columns={'start_unix_timestamp': 'timestamp'}, inplace=True)
+selected_columns.sort_values(by='timestamp', ascending=True)
+selected_columns['timestamp'] = selected_columns['timestamp'].astype(int)
+selected_columns.to_csv(DATA_FOLDER+"/carbon_footprint_data.csv", sep=';', header=True,index=False)
+
 
 
 
@@ -310,15 +367,7 @@ for date_to_get in dates_not_in_dataframe:
 #                                          __/ |
 #                                         |___/ 
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-
-df_data = pd.read_csv(DATA_FOLDER+"/carbon_footprint_data.csv", header=0, sep=";")
-
-df_data['start_datetime'] = pd.to_datetime(df_data['start_datetime'])
-df_data['end_datetime'] = pd.to_datetime(df_data['end_datetime'])
-
-df_data= df_data.sort_values(by='start_datetime', ascending=True)
 
 # Plotting
 plt.figure(figsize=(10, 6))
@@ -334,21 +383,6 @@ plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 plt.xticks(rotation=45)
 plt.savefig(DATA_FOLDER+'/Power Generation per Production Type - Germany.png')
 
-# co2 dict ist in gr/kWh
-# df[energy source] ist in MW pro viertelstunde
-#  Umrechnung: df[energy_source]/4 -> MWh 
-#  df[energy_source]/4*1000 -> kWh
-
-
-for energy_source, co2_emission in co2_dict.items():
-    df_data[f"{energy_source}_co2"] = df_data[energy_source]/4*1000 * co2_emission
-
-df_data['totalEnergy_MWh'] = df_data[list(columns)].sum(axis=1)# still in MW pro 15 minutes
-df_data['totalEnergy_MWh'] = df_data['totalEnergy_MWh']/4# now in MWh
-columns_to_sum_co2 = [column + '_co2' for column in columns]
-df_data['totalCO2_gr'] = df_data[columns_to_sum_co2].sum(axis=1)
-df_data['emission_gr_kWh'] = round(df_data['totalCO2_gr'] / (df_data['totalEnergy_MWh']*1000),3) # gr / MWh*1000 -> gr/kWh
-
 
 # Plotting
 plt.figure(figsize=(10, 6))
@@ -363,5 +397,5 @@ plt.title(f'Emissions of electricity production (CO2 gr/kWh)   - Germany - DATE'
 plt.xticks(rotation=45)
 
 plt.savefig(DATA_FOLDER+'/Emissions of electricity production (CO2 gr.kWh)   - Germany.png')
-
+logging.info(f'Finished - Data is in {DATA_FOLDER}/carbon_footprint_data.csv ')
 sys.exit(0)
