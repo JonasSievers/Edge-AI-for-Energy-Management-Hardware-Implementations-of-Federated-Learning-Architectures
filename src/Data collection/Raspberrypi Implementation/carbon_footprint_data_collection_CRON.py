@@ -22,7 +22,6 @@ import numpy as np
 import matplotlib.dates as mdates
 import os
 import sys
-from smsapi import id_smsapi, pw_smsapi
 from carbon_values import co2_dict
 import logging
 
@@ -370,7 +369,7 @@ selected_columns.to_csv(DATA_FOLDER+"/carbon_footprint_data.csv", sep=';', heade
 
 
 # Plotting
-plt.figure(figsize=(10, 6))
+plt.figure(figsize=(18, 10))
 
 for i, column in enumerate(sorted(columns)):
     plt.plot(df_data['start_datetime'], df_data[f'{column}'], label=f'{column}', linestyle=line_styles[i%3])
@@ -385,7 +384,7 @@ plt.savefig(DATA_FOLDER+'/Power Generation per Production Type - Germany.png')
 
 
 # Plotting
-plt.figure(figsize=(10, 6))
+plt.figure(figsize=(18, 10))
 
 
 plt.plot(df_data['start_datetime'], df_data["emission_gr_kWh"], label="emission_gr_kWh")
