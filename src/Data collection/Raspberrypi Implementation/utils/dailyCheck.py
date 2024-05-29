@@ -1,0 +1,3 @@
+from carbon_footprint_data_collection_verifyOldData import verifyDailyRoutine
+
+verifyDailyRoutine(True)
